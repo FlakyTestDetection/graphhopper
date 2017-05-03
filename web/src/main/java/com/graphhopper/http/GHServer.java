@@ -27,12 +27,14 @@ import org.eclipse.jetty.server.Handler;
 import org.eclipse.jetty.server.HttpConnectionFactory;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.ServerConnector;
+import org.eclipse.jetty.server.handler.ContextHandler;
 import org.eclipse.jetty.server.handler.HandlerList;
 import org.eclipse.jetty.server.handler.ResourceHandler;
 import org.eclipse.jetty.server.handler.gzip.GzipHandler;
 import org.eclipse.jetty.servlet.FilterHolder;
 import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.eclipse.jetty.servlet.ServletHolder;
+import org.eclipse.jetty.util.resource.Resource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -66,7 +68,12 @@ public class GHServer {
         resHandler.setWelcomeFiles(new String[]{
                 "index.html"
         });
-        resHandler.setResourceBase(args.get("jetty.resourcebase", "./web/src/main/webapp"));
+        resHandler.setRedirectWelcome(false);
+
+        ContextHandler contextHandler = new ContextHandler();
+        contextHandler.setContextPath("/");
+        contextHandler.setBaseResource(Resource.newResource(args.get("jetty.resourcebase", "./web/src/main/webapp")));
+        contextHandler.setHandler(resHandler);
 
         server = new Server();
         // getSessionHandler and getSecurityHandler should always return null
@@ -74,10 +81,12 @@ public class GHServer {
         servHandler.setErrorHandler(new GHErrorHandler());
         servHandler.setContextPath("/");
 
-        servHandler.addServlet(new ServletHolder(new InvalidRequestServlet()), "/*");
+        // Putting this here (and not in the guice servlet module) because it should take precedence
+        // over more specific routes. And guice, strangely, is order-dependent (even though, except in the servlet
+        // extension, modules are _not_ supposed to be ordered).
+        servHandler.addServlet(new ServletHolder(injector.getInstance(InvalidRequestServlet.class)), "/*");
 
-        FilterHolder guiceFilter = new FilterHolder(injector.getInstance(GuiceFilter.class));
-        servHandler.addFilter(guiceFilter, "/*", EnumSet.allOf(DispatcherType.class));
+        servHandler.addFilter(new FilterHolder(new GuiceFilter()), "/*", EnumSet.allOf(DispatcherType.class));
 
         ServerConnector connector0 = new ServerConnector(server);
         int httpPort = args.getInt("jetty.port", 8989);
@@ -95,7 +104,7 @@ public class GHServer {
 
         HandlerList handlers = new HandlerList();
         handlers.setHandlers(new Handler[]{
-                resHandler, servHandler
+                contextHandler, servHandler
         });
 
         GzipHandler gzipHandler = new GzipHandler();
@@ -127,8 +136,6 @@ public class GHServer {
                     install(new GraphHopperModule(args));
                 }
                 install(new GraphHopperServletModule(args));
-
-                bind(GuiceFilter.class);
             }
         };
     }
