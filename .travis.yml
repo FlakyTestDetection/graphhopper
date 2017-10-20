@@ -10,20 +10,16 @@ before_install:
 - unzip -qq apache-maven-3.3.9.zip
 - export M2_HOME=$PWD/apache-maven-3.3.9
 - export PATH=$M2_HOME/bin:$PATH
-cache:
-  directories:
-  - $HOME/.m2
-env:
-  global:
-  - BASEURL=https://www-eu.apache.org/dist/maven/maven-3/VERSION/binaries/apache-maven-VERSION-bin.zip
-  - FILE=apache-maven-VERSION-bin.zip
-  - DIR=apache-maven-VERSION
-  - VERSION=3.3.9
-  - secure: j6a61/qnfFcSjx5XxmxO2hqBOwtVx5HWrD1+4Atl7WG/pRKz9+jSga1Y7oDAFb2SIl8S65kDmPQB/vC8aHxUDj/Wizjxnxn1FhPqoe9yO6Ztft+984FKFyvj7s6tsBJKcehGec+chTOwZQpH4oI4rU6IlepDHnGLHiOd0Iviryg=
-  - secure: GiFr+v2lTQk/sTQB7CYjju1/mupS8LSJupmizLqY454utiZkabDMBOZQnF9ukpy7WhveB9hKQyEKf9iP2w7HSYEjgvogT26vZ5f2MeLnR4SWvqEtf/WBvvh+W+k/rb2f6YgitkB4Jlxn2izemBEDuKplGJphzGW41lf8XZ2IxVI=
 install: true
-jdk:
-- oraclejdk8
+
+after_success:
+  # deploy snapshot artifacts to maven central
+  - if [ "$TRAVIS_JDK_VERSION" == "oraclejdk8" ] &&
+       [ "$TRAVIS_BRANCH" == "master" ] && [ "$TRAVIS_PULL_REQUEST" == "false" ]; then
+         travis_wait mvn deploy --settings core/files/settings.xml -DskipTests=true -B;
+    else
+        echo "Not deploying snapshot artifact for $TRAVIS_BRANCH";
+    fi
 notifications:
   email: false
   slack:
